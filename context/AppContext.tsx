@@ -149,7 +149,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [savedEvents, setCurrentEvent]);
 
-  // FIX: Removed useMemo wrapper to solve build errors.
+  // FIX: Removed the 'useMemo' hook that was causing build errors.
   const value: AppContextType = {
     products,
     addProduct,
