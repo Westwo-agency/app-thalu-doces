@@ -22,9 +22,11 @@ const getInitialEvent = (): EventData => ({
 
 interface AppContextType {
   products: Product[];
-  setProducts: React.Dispatch<React.SetStateAction<Product[]>>;
+  addProduct: (product: Product) => void;
+  deleteProduct: (productId: string) => void;
   savedEvents: EventData[];
   setSavedEvents: React.Dispatch<React.SetStateAction<EventData[]>>;
+  saveEvent: () => void;
   currentEvent: EventData;
   setCurrentEvent: React.Dispatch<React.SetStateAction<EventData>>;
   updateCurrentEvent: <K extends keyof EventData>(field: K, value: EventData[K]) => void;
@@ -102,6 +104,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return { productsCost, fuelCost, helperCost, totalCosts };
   }, []);
 
+  const addProduct = useCallback((product: Product) => {
+    setProducts(prev => [...prev, product]);
+  }, [setProducts]);
+
+  const deleteProduct = useCallback((productId: string) => {
+    setProducts(prev => prev.filter(p => p.id !== productId));
+  }, [setProducts]);
+
+  const saveEvent = useCallback(() => {
+    const totalSales = currentEvent.products.reduce((acc, p) => acc + (p.quantitySold * p.sellPrice), 0);
+    const { totalCosts } = getCalculatedCosts(currentEvent);
+    const profit = totalSales - totalCosts;
+
+    const eventToSave = {
+        ...currentEvent,
+        totalSales,
+        totalCosts,
+        profit,
+    };
+
+    setSavedEvents(prev => {
+      const existingEventIndex = prev.findIndex(e => e.id === eventToSave.id);
+      if (existingEventIndex > -1) {
+          const updatedEvents = [...prev];
+          updatedEvents[existingEventIndex] = eventToSave;
+          return updatedEvents;
+      }
+      return [...prev, eventToSave];
+    });
+  }, [currentEvent, setSavedEvents, getCalculatedCosts]);
+
   const resetCurrentEvent = useCallback(() => {
     setCurrentEvent(getInitialEvent());
     setIsEditing(false);
@@ -116,11 +149,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [savedEvents, setCurrentEvent]);
 
+  // FIX: Removed useMemo wrapper to solve build errors.
   const value: AppContextType = {
     products,
-    setProducts,
+    addProduct,
+    deleteProduct,
     savedEvents,
     setSavedEvents,
+    saveEvent,
     currentEvent,
     setCurrentEvent,
     updateCurrentEvent,
