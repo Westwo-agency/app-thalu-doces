@@ -1,4 +1,3 @@
-// Este é o conteúdo completo e corrigido para o arquivo EventsPage.tsx
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import jsPDF from 'jspdf';
@@ -16,12 +15,12 @@ interface EventsPageProps {
 }
 
 export const EventsPage: React.FC<EventsPageProps> = ({ setActiveTab }) => {
-    const { savedEvents, setSavedEvents, getCalculatedCosts, loadEventForEditing } = useAppContext();
+    const { savedEvents, deleteEvent, getCalculatedCosts, loadEventForEditing } = useAppContext();
     const [sharingEventId, setSharingEventId] = useState<string | null>(null);
 
     const handleDeleteEvent = (eventId: string) => {
         if (window.confirm('Tem certeza que deseja excluir este evento? Esta ação não pode ser desfeita.')) {
-            setSavedEvents(prev => prev.filter(e => e.id !== eventId));
+            deleteEvent(eventId);
         }
     };
 
