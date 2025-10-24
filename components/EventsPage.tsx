@@ -1,3 +1,4 @@
+// Este é o conteúdo completo e corrigido para o arquivo EventsPage.tsx
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import jsPDF from 'jspdf';
@@ -26,35 +27,33 @@ export const EventsPage: React.FC<EventsPageProps> = ({ setActiveTab }) => {
 
     const handleSharePdf = async (event: EventData) => {
         setSharingEventId(event.id);
-        // Allow UI to update to loading state before blocking to generate PDF
         await new Promise(resolve => setTimeout(resolve, 50));
 
         try {
             const doc = new jsPDF();
+            const totalSales = event.totalSales ?? 0;
+            const totalCosts = event.totalCosts ?? 0;
+            const profit = event.profit ?? 0;
 
-            // Title and Subtitle
             doc.setFontSize(18);
             doc.text(`Relatório do Evento: ${event.name}`, 14, 22);
             doc.setFontSize(11);
             const eventDate = new Date(event.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
             doc.text(`${event.location} - ${eventDate}`, 14, 30);
 
-            // Financial Summary
             doc.setFontSize(14);
             doc.text('Resumo Financeiro', 14, 45);
             autoTable(doc, {
                 startY: 50,
                 body: [
-                    ['Total de Vendas', `R$ ${event.totalSales.toFixed(2)}`],
-                    ['Total de Custos', `R$ ${event.totalCosts.toFixed(2)}`],
-                    [{ content: 'Lucro', styles: { fontStyle: 'bold' } }, { content: `R$ ${event.profit.toFixed(2)}`, styles: { fontStyle: 'bold' } }]
+                    ['Total de Vendas', `R$ ${totalSales.toFixed(2)}`],
+                    ['Total de Custos', `R$ ${totalCosts.toFixed(2)}`],
+                    [{ content: 'Lucro', styles: { fontStyle: 'bold' } }, { content: `R$ ${profit.toFixed(2)}`, styles: { fontStyle: 'bold' } }]
                 ],
                 theme: 'grid',
             });
 
             const finalYAfterSummary = (doc as any).lastAutoTable.finalY;
-
-            // Cost Breakdown
             const { fuelCost, helperCost } = getCalculatedCosts(event);
             const productsCost = event.products.reduce((acc, p) => acc + (p.quantitySold * p.costPrice), 0);
             doc.setFontSize(14);
@@ -64,7 +63,6 @@ export const EventsPage: React.FC<EventsPageProps> = ({ setActiveTab }) => {
                 body: [
                     ['Combustível (Ida e Volta)', `R$ ${fuelCost.toFixed(2)}`],
                     ['Ajudantes', `R$ ${helperCost.toFixed(2)}`],
-                    // FIX: Convert event.extraCosts to a number before calling toFixed.
                     ['Custos Extras', `R$ ${(parseFloat(String(event.extraCosts)) || 0).toFixed(2)}`],
                     ['Custo dos Produtos Vendidos', `R$ ${productsCost.toFixed(2)}`],
                 ],
@@ -72,8 +70,6 @@ export const EventsPage: React.FC<EventsPageProps> = ({ setActiveTab }) => {
             });
             
             const finalYAfterCosts = (doc as any).lastAutoTable.finalY;
-
-            // Sales Breakdown Table
             const salesData = event.products
                 .filter(p => p.quantitySold > 0)
                 .map(p => [p.name, p.quantitySold, `R$ ${p.sellPrice.toFixed(2)}`, `R$ ${(p.quantitySold * p.sellPrice).toFixed(2)}`]);
@@ -87,11 +83,9 @@ export const EventsPage: React.FC<EventsPageProps> = ({ setActiveTab }) => {
                 });
             }
             
-            // Inventory Summary Table
-            // FIX: Convert p.quantityTaken to a number for comparison and arithmetic operations.
             const inventoryData = event.products
                 .filter(p => (parseFloat(String(p.quantityTaken)) || 0) > 0)
-                .map(p => [p.name, p.quantityTaken, p.quantitySold, (parseFloat(String(p.quantityTaken)) || 0) - p.quantitySold]);
+                .map(p => [p.name, String(p.quantityTaken), p.quantitySold, (parseFloat(String(p.quantityTaken)) || 0) - p.quantitySold]);
             const finalYAfterSales = (doc as any).lastAutoTable.finalY || finalYAfterCosts;
             if(inventoryData.length > 0) {
                 doc.setFontSize(14);
@@ -115,7 +109,6 @@ export const EventsPage: React.FC<EventsPageProps> = ({ setActiveTab }) => {
                 await navigator.share(shareData);
             } else {
                 alert('Não é possível compartilhar diretamente a partir deste navegador/computador. O arquivo PDF será baixado para que você possa enviá-lo manualmente.');
-                console.log("Web Share API for files not supported, falling back to download.");
                 const link = document.createElement('a');
                 link.href = URL.createObjectURL(pdfFile);
                 link.download = pdfFile.name;
@@ -142,6 +135,9 @@ export const EventsPage: React.FC<EventsPageProps> = ({ setActiveTab }) => {
                     <div className="space-y-4">
                         {savedEvents.slice().reverse().map(event => {
                             const isSharing = sharingEventId === event.id;
+                            const totalSales = event.totalSales ?? 0;
+                            const totalCosts = event.totalCosts ?? 0;
+                            const profit = event.profit ?? 0;
                             return (
                                 <div key={event.id} className="p-4 bg-white rounded-lg shadow-md border border-purple-100">
                                     <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
@@ -177,16 +173,16 @@ export const EventsPage: React.FC<EventsPageProps> = ({ setActiveTab }) => {
                                     <div className="mt-4 pt-4 border-t border-purple-100 grid grid-cols-2 md:grid-cols-3 gap-4 text-center">
                                         <div>
                                             <p className="text-xs text-gray-500">Vendas</p>
-                                            <p className="font-semibold text-green-600">R$ {event.totalSales.toFixed(2)}</p>
+                                            <p className="font-semibold text-green-600">R$ {totalSales.toFixed(2)}</p>
                                         </div>
                                         <div>
                                             <p className="text-xs text-gray-500">Custos</p>
-                                            <p className="font-semibold text-red-600">R$ {event.totalCosts.toFixed(2)}</p>
+                                            <p className="font-semibold text-red-600">R$ {totalCosts.toFixed(2)}</p>
                                         </div>
                                         <div className="col-span-2 md:col-span-1">
                                             <p className="text-xs text-gray-500">Lucro</p>
-                                            <p className={`font-bold text-lg ${event.profit >= 0 ? 'text-green-700' : 'text-red-700'}`}>
-                                                R$ {event.profit.toFixed(2)}
+                                            <p className={`font-bold text-lg ${profit >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                                                R$ {profit.toFixed(2)}
                                             </p>
                                         </div>
                                     </div>
