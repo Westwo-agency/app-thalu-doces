@@ -1,0 +1,5 @@
+{
+  "name": "Thalu Doces Gestão",
+  "description": "Um aplicativo para gerenciamento de estoque, eventos e vendas para a empresa de doces Thalu Doces. Permite cadastrar eventos, calcular custos, gerenciar produtos, registrar vendas e gerar relatórios.",
+  "requestFramePermissions": []
+}
