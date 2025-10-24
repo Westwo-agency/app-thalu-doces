@@ -1,10 +1,9 @@
-// FIX: Implement and export AppProvider and useAppContext to provide shared state management.
-import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
-import useLocalStorage from '../hooks/useLocalStorage';
+import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect } from 'react';
 import type { Product, EventData, EventProduct } from '../types';
+import { db } from '../firebaseConfig';
+import { collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore';
 
-// Function to get a fresh initial state for an event
-const getInitialEvent = (): EventData => ({
+const createInitialEventState = (): EventData => ({
   id: `event_${new Date().toISOString()}`,
   name: '',
   date: new Date().toISOString().split('T')[0],
@@ -22,119 +21,152 @@ const getInitialEvent = (): EventData => ({
 
 interface AppContextType {
   products: Product[];
-  setProducts: React.Dispatch<React.SetStateAction<Product[]>>;
+  addProduct: (product: Omit<Product, 'id'>) => void;
+  deleteProduct: (productId: string) => void;
   savedEvents: EventData[];
-  setSavedEvents: React.Dispatch<React.SetStateAction<EventData[]>>;
+  saveEvent: (event: EventData) => void;
+  deleteEvent: (eventId: string) => void;
   currentEvent: EventData;
-  setCurrentEvent: React.Dispatch<React.SetStateAction<EventData>>;
-  updateCurrentEvent: <K extends keyof EventData>(field: K, value: EventData[K]) => void;
-  updateEventProduct: (productId: string, field: 'quantityTaken' | 'quantitySold', value: string | number) => void;
+  updateCurrentEvent: (key: keyof EventData, value: any) => void;
+  updateEventProduct: (productId: string, key: keyof EventProduct, value: any) => void;
+  resetCurrentEvent: () => void;
   getCalculatedCosts: (event: EventData) => {
-    productsCost: number;
     fuelCost: number;
     helperCost: number;
+    productsCost: number;
     totalCosts: number;
   };
-  resetCurrentEvent: () => void;
-  loadEventForEditing: (eventId: string, onLoaded: () => void) => void;
   isEditing: boolean;
+  loadEventForEditing: (eventId: string, callback?: () => void) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [products, setProducts] = useLocalStorage<Product[]>('products', []);
-  const [savedEvents, setSavedEvents] = useLocalStorage<EventData[]>('savedEvents', []);
-  const [currentEvent, setCurrentEvent] = useLocalStorage<EventData>('currentEvent', getInitialEvent());
+export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [savedEvents, setSavedEvents] = useState<EventData[]>([]);
+  const [currentEvent, setCurrentEvent] = useState<EventData>(createInitialEventState());
   const [isEditing, setIsEditing] = useState(false);
 
-  const updateCurrentEvent = useCallback(<K extends keyof EventData>(field: K, value: EventData[K]) => {
-    setCurrentEvent(prev => ({ ...prev, [field]: value }));
-  }, [setCurrentEvent]);
+  // Efeito para carregar e ouvir produtos em tempo real
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, "products"), (snapshot) => {
+      const productsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Product[];
+      setProducts(productsData);
+    });
+    return () => unsubscribe();
+  }, []);
 
-  const updateEventProduct = useCallback((productId: string, field: 'quantityTaken' | 'quantitySold', value: string | number) => {
-    setCurrentEvent(prev => {
-      const existingProductInfo = products.find(p => p.id === productId);
-      if (!existingProductInfo) return prev;
+  // Efeito para carregar e ouvir eventos salvos em tempo real
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, "savedEvents"), (snapshot) => {
+      const eventsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as EventData[];
+      setSavedEvents(eventsData);
+    });
+    return () => unsubscribe();
+  }, []);
 
-      const newEventProducts = [...prev.products];
-      const productIndex = newEventProducts.findIndex(p => p.id === productId);
+  const addProduct = async (product: Omit<Product, 'id'>) => {
+    const newDocRef = doc(collection(db, "products"));
+    await setDoc(newDocRef, { ...product, id: newDocRef.id });
+  };
+  
+  const deleteProduct = async (productId: string) => {
+    await deleteDoc(doc(db, "products", productId));
+  };
 
-      if (productIndex > -1) {
-        // Update existing event product
-        newEventProducts[productIndex] = { ...newEventProducts[productIndex], [field]: value };
+  const saveEvent = async (event: EventData) => {
+    await setDoc(doc(db, "savedEvents", event.id), event);
+  };
+  
+  const deleteEvent = async (eventId: string) => {
+    await deleteDoc(doc(db, "savedEvents", eventId));
+  };
+  
+  const updateCurrentEvent = useCallback((key: keyof EventData, value: any) => {
+    setCurrentEvent(prev => ({ ...prev, [key]: value }));
+  }, []);
+  
+  const updateEventProduct = useCallback((productId: string, key: keyof EventProduct, value: any) => {
+    setCurrentEvent(prevEvent => {
+      const productTemplate = products.find(p => p.id === productId);
+      if (!productTemplate) return prevEvent;
+
+      const existingProductIndex = prevEvent.products.findIndex(p => p.id === productId);
+      
+      let updatedProducts: EventProduct[];
+
+      if (existingProductIndex > -1) {
+        updatedProducts = [...prevEvent.products];
+        const updatedProduct = { ...updatedProducts[existingProductIndex], [key]: value };
+        updatedProducts[existingProductIndex] = updatedProduct;
       } else {
-        // Add new event product
         const newEventProduct: EventProduct = {
-          ...existingProductInfo,
+          ...productTemplate,
           quantityTaken: 0,
           quantitySold: 0,
-          [field]: value,
+          [key]: value,
         };
-        newEventProducts.push(newEventProduct);
+        updatedProducts = [...prevEvent.products, newEventProduct];
       }
-
-      return { ...prev, products: newEventProducts };
+      
+      return { ...prevEvent, products: updatedProducts };
     });
-  }, [setCurrentEvent, products]);
-  
+  }, [products]);
+
+  const resetCurrentEvent = useCallback(() => {
+    setCurrentEvent(createInitialEventState());
+    setIsEditing(false);
+  }, []);
+
+  const loadEventForEditing = useCallback((eventId: string, callback?: () => void) => {
+    const eventToEdit = savedEvents.find(e => e.id === eventId);
+    if (eventToEdit) {
+      setCurrentEvent(eventToEdit);
+      setIsEditing(true);
+      if (callback) callback();
+    }
+  }, [savedEvents]);
+
   const getCalculatedCosts = useCallback((event: EventData) => {
     const distance = parseFloat(String(event.distance)) || 0;
     const consumption = parseFloat(String(event.consumption)) || 0;
     const fuelPrice = parseFloat(String(event.fuelPrice)) || 0;
-    
-    const fuelCost = consumption > 0 ? ((distance * 2) / consumption) * fuelPrice : 0;
+    const fuelCost = consumption > 0 ? (distance / consumption) * fuelPrice : 0;
     
     const helpers = parseFloat(String(event.helpers)) || 0;
     const helperPayment = parseFloat(String(event.helperPayment)) || 0;
     const helperCost = helpers * helperPayment;
     
     const extraCosts = parseFloat(String(event.extraCosts)) || 0;
-
-    const productsCost = event.products.reduce((acc, p) => {
-      const sold = p.quantitySold || 0;
-      const cost = p.costPrice || 0;
-      return acc + (sold * cost);
-    }, 0);
-
-    const totalCosts = productsCost + fuelCost + helperCost + extraCosts;
-
-    return { productsCost, fuelCost, helperCost, totalCosts };
+    
+    const productsCost = event.products.reduce((acc, p) => acc + (p.quantitySold * p.costPrice), 0);
+    
+    const totalCosts = fuelCost + helperCost + extraCosts + productsCost;
+    
+    return { fuelCost, helperCost, productsCost, totalCosts };
   }, []);
-
-  const resetCurrentEvent = useCallback(() => {
-    setCurrentEvent(getInitialEvent());
-    setIsEditing(false);
-  }, [setCurrentEvent]);
   
-  const loadEventForEditing = useCallback((eventId: string, onLoaded: () => void) => {
-    const eventToLoad = savedEvents.find(e => e.id === eventId);
-    if (eventToLoad) {
-      setCurrentEvent(eventToLoad);
-      setIsEditing(true);
-      onLoaded();
-    }
-  }, [savedEvents, setCurrentEvent]);
-
-  const value = useMemo(() => ({
+  const value: AppContextType = {
     products,
-    setProducts,
+    addProduct,
+    deleteProduct,
     savedEvents,
-    setSavedEvents,
+    saveEvent,
+    deleteEvent,
     currentEvent,
-    setCurrentEvent,
     updateCurrentEvent,
     updateEventProduct,
-    getCalculatedCosts,
     resetCurrentEvent,
-    loadEventForEditing,
+    getCalculatedCosts,
     isEditing,
-  }), [products, setProducts, savedEvents, setSavedEvents, currentEvent, setCurrentEvent, updateCurrentEvent, updateEventProduct, getCalculatedCosts, resetCurrentEvent, loadEventForEditing, isEditing]);
+    loadEventForEditing,
+  };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 };
 
-export const useAppContext = () => {
+export const useAppContext = (): AppContextType => {
   const context = useContext(AppContext);
   if (context === undefined) {
     throw new Error('useAppContext must be used within an AppProvider');
