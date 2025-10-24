@@ -1,3 +1,4 @@
+// context/AppContext.tsx
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import useLocalStorage from '../hooks/useLocalStorage';
 import type { Product, EventData, EventProduct } from '../types';
@@ -146,7 +147,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [savedEvents, setCurrentEvent]);
 
-  // CORREÇÃO: Removido o 'useMemo' que estava causando os erros de build.
+  // CORREÇÃO: Removido o hook 'useMemo' que estava causando os erros de build.
   const value: AppContextType = {
     products,
     addProduct,
