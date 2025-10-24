@@ -27,31 +27,23 @@ export const EventsPage: React.FC<EventsPageProps> = ({ setActiveTab }) => {
     const handleSharePdf = async (event: EventData) => {
         setSharingEventId(event.id);
         await new Promise(resolve => setTimeout(resolve, 50));
-
         try {
             const doc = new jsPDF();
             const totalSales = event.totalSales ?? 0;
             const totalCosts = event.totalCosts ?? 0;
             const profit = event.profit ?? 0;
-
             doc.setFontSize(18);
             doc.text(`Relatório do Evento: ${event.name}`, 14, 22);
             doc.setFontSize(11);
             const eventDate = new Date(event.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
             doc.text(`${event.location} - ${eventDate}`, 14, 30);
-
             doc.setFontSize(14);
             doc.text('Resumo Financeiro', 14, 45);
             autoTable(doc, {
                 startY: 50,
-                body: [
-                    ['Total de Vendas', `R$ ${totalSales.toFixed(2)}`],
-                    ['Total de Custos', `R$ ${totalCosts.toFixed(2)}`],
-                    [{ content: 'Lucro', styles: { fontStyle: 'bold' } }, { content: `R$ ${profit.toFixed(2)}`, styles: { fontStyle: 'bold' } }]
-                ],
+                body: [['Total de Vendas', `R$ ${totalSales.toFixed(2)}`], ['Total de Custos', `R$ ${totalCosts.toFixed(2)}`], [{ content: 'Lucro', styles: { fontStyle: 'bold' } }, { content: `R$ ${profit.toFixed(2)}`, styles: { fontStyle: 'bold' } }]],
                 theme: 'grid',
             });
-
             const finalYAfterSummary = (doc as any).lastAutoTable.finalY;
             const { fuelCost, helperCost } = getCalculatedCosts(event);
             const productsCost = event.products.reduce((acc, p) => acc + (p.quantitySold * p.costPrice), 0);
@@ -59,51 +51,26 @@ export const EventsPage: React.FC<EventsPageProps> = ({ setActiveTab }) => {
             doc.text('Detalhamento de Custos', 14, finalYAfterSummary + 15);
             autoTable(doc, {
                 startY: finalYAfterSummary + 20,
-                body: [
-                    ['Combustível (Ida e Volta)', `R$ ${fuelCost.toFixed(2)}`],
-                    ['Ajudantes', `R$ ${helperCost.toFixed(2)}`],
-                    ['Custos Extras', `R$ ${(parseFloat(String(event.extraCosts)) || 0).toFixed(2)}`],
-                    ['Custo dos Produtos Vendidos', `R$ ${productsCost.toFixed(2)}`],
-                ],
+                body: [['Combustível (Ida e Volta)', `R$ ${fuelCost.toFixed(2)}`], ['Ajudantes', `R$ ${helperCost.toFixed(2)}`], ['Custos Extras', `R$ ${(parseFloat(String(event.extraCosts)) || 0).toFixed(2)}`], ['Custo dos Produtos Vendidos', `R$ ${productsCost.toFixed(2)}`]],
                 theme: 'striped'
             });
-            
             const finalYAfterCosts = (doc as any).lastAutoTable.finalY;
-            const salesData = event.products
-                .filter(p => p.quantitySold > 0)
-                .map(p => [p.name, p.quantitySold, `R$ ${p.sellPrice.toFixed(2)}`, `R$ ${(p.quantitySold * p.sellPrice).toFixed(2)}`]);
+            const salesData = event.products.filter(p => p.quantitySold > 0).map(p => [p.name, p.quantitySold, `R$ ${p.sellPrice.toFixed(2)}`, `R$ ${(p.quantitySold * p.sellPrice).toFixed(2)}`]);
             if(salesData.length > 0) {
                 doc.setFontSize(14);
                 doc.text('Vendas por Produto', 14, finalYAfterCosts + 15);
-                autoTable(doc, {
-                    startY: finalYAfterCosts + 20,
-                    head: [['Produto', 'Qtd. Vendida', 'Preço Un.', 'Total']],
-                    body: salesData,
-                });
+                autoTable(doc, { startY: finalYAfterCosts + 20, head: [['Produto', 'Qtd. Vendida', 'Preço Un.', 'Total']], body: salesData });
             }
-            
-            const inventoryData = event.products
-                .filter(p => (parseFloat(String(p.quantityTaken)) || 0) > 0)
-                .map(p => [p.name, String(p.quantityTaken), p.quantitySold, (parseFloat(String(p.quantityTaken)) || 0) - p.quantitySold]);
+            const inventoryData = event.products.filter(p => (parseFloat(String(p.quantityTaken)) || 0) > 0).map(p => [p.name, String(p.quantityTaken), p.quantitySold, (parseFloat(String(p.quantityTaken)) || 0) - p.quantitySold]);
             const finalYAfterSales = (doc as any).lastAutoTable.finalY || finalYAfterCosts;
             if(inventoryData.length > 0) {
                 doc.setFontSize(14);
                 doc.text('Resumo do Estoque', 14, finalYAfterSales + 15);
-                autoTable(doc, {
-                    startY: finalYAfterSales + 20,
-                    head: [['Produto', 'Qtd. Levada', 'Qtd. Vendida', 'Sobra']],
-                    body: inventoryData,
-                });
+                autoTable(doc, { startY: finalYAfterSales + 20, head: [['Produto', 'Qtd. Levada', 'Qtd. Vendida', 'Sobra']], body: inventoryData });
             }
-
             const pdfBlob = doc.output('blob');
             const pdfFile = new File([pdfBlob], `Relatorio_${event.name.replace(/\s/g, '_')}.pdf`, { type: 'application/pdf' });
-            const shareData = { 
-                files: [pdfFile], 
-                title: `Relatório do Evento: ${event.name}`, 
-                text: `*Relatório do Evento: ${event.name}*\n\nSegue o relatório detalhado em PDF.` 
-            };
-
+            const shareData = { files: [pdfFile], title: `Relatório do Evento: ${event.name}`, text: `*Relatório do Evento: ${event.name}*\n\nSegue o relatório detalhado em PDF.` };
             if (navigator.canShare && navigator.canShare(shareData)) {
                 await navigator.share(shareData);
             } else {
@@ -145,28 +112,9 @@ export const EventsPage: React.FC<EventsPageProps> = ({ setActiveTab }) => {
                                             <p className="text-sm text-gray-500">{event.location} - {new Date(event.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</p>
                                         </div>
                                         <div className="flex space-x-2 flex-shrink-0">
-                                            <Button
-                                                variant="secondary"
-                                                onClick={() => loadEventForEditing(event.id, () => setActiveTab('home'))}
-                                                icon={<PencilIcon />}
-                                                disabled={isSharing}
-                                            >
-                                                Editar
-                                            </Button>
-                                            <Button 
-                                                variant="secondary" 
-                                                onClick={() => handleSharePdf(event)} 
-                                                icon={isSharing ? null : <ShareIcon />}
-                                                disabled={isSharing}
-                                            >
-                                                {isSharing ? 'Gerando...' : 'Compartilhar'}
-                                            </Button>
-                                            <Button 
-                                                variant="danger" 
-                                                onClick={() => handleDeleteEvent(event.id)} 
-                                                icon={<TrashIcon />}
-                                                disabled={isSharing} 
-                                            />
+                                            <Button variant="secondary" onClick={() => loadEventForEditing(event.id, () => setActiveTab('home'))} icon={<PencilIcon />} disabled={isSharing}>Editar</Button>
+                                            <Button variant="secondary" onClick={() => handleSharePdf(event)} icon={isSharing ? null : <ShareIcon />} disabled={isSharing}>{isSharing ? 'Gerando...' : 'Compartilhar'}</Button>
+                                            <Button variant="danger" onClick={() => handleDeleteEvent(event.id)} icon={<TrashIcon />} disabled={isSharing} />
                                         </div>
                                     </div>
                                     <div className="mt-4 pt-4 border-t border-purple-100 grid grid-cols-2 md:grid-cols-3 gap-4 text-center">
@@ -180,9 +128,7 @@ export const EventsPage: React.FC<EventsPageProps> = ({ setActiveTab }) => {
                                         </div>
                                         <div className="col-span-2 md:col-span-1">
                                             <p className="text-xs text-gray-500">Lucro</p>
-                                            <p className={`font-bold text-lg ${profit >= 0 ? 'text-green-700' : 'text-red-700'}`}>
-                                                R$ {profit.toFixed(2)}
-                                            </p>
+                                            <p className={`font-bold text-lg ${profit >= 0 ? 'text-green-700' : 'text-red-700'}`}>R$ {profit.toFixed(2)}</p>
                                         </div>
                                     </div>
                                 </div>
