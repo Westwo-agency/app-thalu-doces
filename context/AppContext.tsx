@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect } from 'react';
 import type { Product, EventData, EventProduct } from '../types';
 import { db } from '../firebaseConfig';
-import { collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, deleteDoc, getDocs, writeBatch } from 'firebase/firestore';
 
 const createInitialEventState = (): EventData => ({
   id: `event_${new Date().toISOString()}`,
@@ -21,11 +21,11 @@ const createInitialEventState = (): EventData => ({
 
 interface AppContextType {
   products: Product[];
-  addProduct: (product: Omit<Product, 'id'>) => void;
-  deleteProduct: (productId: string) => void;
+  addProduct: (product: Omit<Product, 'id'>) => Promise<void>;
+  deleteProduct: (productId: string) => Promise<void>;
   savedEvents: EventData[];
-  saveEvent: (event: EventData) => void;
-  deleteEvent: (eventId: string) => void;
+  saveEvent: (event: EventData) => Promise<void>;
+  deleteEvent: (eventId: string) => Promise<void>;
   currentEvent: EventData;
   updateCurrentEvent: (key: keyof EventData, value: any) => void;
   updateEventProduct: (productId: string, key: keyof EventProduct, value: any) => void;
@@ -48,31 +48,79 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [currentEvent, setCurrentEvent] = useState<EventData>(createInitialEventState());
   const [isEditing, setIsEditing] = useState(false);
 
-  // Efeito para carregar e ouvir produtos em tempo real
+  useEffect(() => {
+    const migrateData = async () => {
+      const migrationDone = localStorage.getItem('firebaseMigrationDone');
+      if (migrationDone) return;
+      console.log("Iniciando migração de dados do localStorage para o Firebase...");
+      try {
+        const batch = writeBatch(db);
+        const localProducts: Product[] = JSON.parse(localStorage.getItem('products') || '[]');
+        if (localProducts.length > 0) {
+          const productsCollection = collection(db, "products");
+          const existingProductsSnap = await getDocs(productsCollection);
+          if (existingProductsSnap.empty) {
+            localProducts.forEach(product => {
+              const docRef = doc(productsCollection, product.id);
+              batch.set(docRef, product);
+            });
+          }
+        }
+        const localEvents: EventData[] = JSON.parse(localStorage.getItem('savedEvents') || '[]');
+        if (localEvents.length > 0) {
+           const eventsCollection = collection(db, "savedEvents");
+           const existingEventsSnap = await getDocs(eventsCollection);
+           if (existingEventsSnap.empty) {
+              localEvents.forEach(event => {
+                const docRef = doc(eventsCollection, event.id);
+                batch.set(docRef, event);
+              });
+           }
+        }
+        await batch.commit();
+        console.log("Migração concluída com sucesso!");
+        localStorage.setItem('firebaseMigrationDone', 'true');
+      } catch (error) {
+        console.error("Erro durante a migração de dados:", error);
+      }
+    };
+    migrateData();
+  }, []);
+
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, "products"), (snapshot) => {
-      const productsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Product[];
+      const productsData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Product[];
       setProducts(productsData);
     });
     return () => unsubscribe();
   }, []);
 
-  // Efeito para carregar e ouvir eventos salvos em tempo real
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, "savedEvents"), (snapshot) => {
-      const eventsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as EventData[];
+      const eventsData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as EventData[];
       setSavedEvents(eventsData);
     });
     return () => unsubscribe();
   }, []);
 
-  const addProduct = async (product: Omit<Product, 'id'>) => {
+  const addProduct = async (productData: Omit<Product, 'id'>) => {
     const newDocRef = doc(collection(db, "products"));
-    await setDoc(newDocRef, { ...product, id: newDocRef.id });
+    const newProduct: Product = { ...productData, id: newDocRef.id };
+    await setDoc(newDocRef, newProduct);
   };
   
   const deleteProduct = async (productId: string) => {
-    await deleteDoc(doc(db, "products", productId));
+    const batch = writeBatch(db);
+    const productDocRef = doc(db, "products", productId);
+    batch.delete(productDocRef);
+    savedEvents.forEach(event => {
+      if (event.products.some(p => p.id === productId)) {
+        const updatedProducts = event.products.filter(p => p.id !== productId);
+        const eventDocRef = doc(db, "savedEvents", event.id);
+        batch.update(eventDocRef, { products: updatedProducts });
+      }
+    });
+    await batch.commit();
   };
 
   const saveEvent = async (event: EventData) => {
@@ -91,11 +139,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setCurrentEvent(prevEvent => {
       const productTemplate = products.find(p => p.id === productId);
       if (!productTemplate) return prevEvent;
-
       const existingProductIndex = prevEvent.products.findIndex(p => p.id === productId);
-      
       let updatedProducts: EventProduct[];
-
       if (existingProductIndex > -1) {
         updatedProducts = [...prevEvent.products];
         const updatedProduct = { ...updatedProducts[existingProductIndex], [key]: value };
@@ -109,7 +154,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         };
         updatedProducts = [...prevEvent.products, newEventProduct];
       }
-      
       return { ...prevEvent, products: updatedProducts };
     });
   }, [products]);
@@ -133,17 +177,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const consumption = parseFloat(String(event.consumption)) || 0;
     const fuelPrice = parseFloat(String(event.fuelPrice)) || 0;
     const fuelCost = consumption > 0 ? (distance / consumption) * fuelPrice : 0;
-    
     const helpers = parseFloat(String(event.helpers)) || 0;
     const helperPayment = parseFloat(String(event.helperPayment)) || 0;
     const helperCost = helpers * helperPayment;
-    
     const extraCosts = parseFloat(String(event.extraCosts)) || 0;
-    
     const productsCost = event.products.reduce((acc, p) => acc + (p.quantitySold * p.costPrice), 0);
-    
     const totalCosts = fuelCost + helperCost + extraCosts + productsCost;
-    
     return { fuelCost, helperCost, productsCost, totalCosts };
   }, []);
   
