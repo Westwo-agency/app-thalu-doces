@@ -1,4 +1,3 @@
-// context/AppContext.tsx
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import useLocalStorage from '../hooks/useLocalStorage';
 import type { Product, EventData, EventProduct } from '../types';
@@ -63,10 +62,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const productIndex = newEventProducts.findIndex(p => p.id === productId);
 
       if (productIndex > -1) {
-        // Update existing event product
         newEventProducts[productIndex] = { ...newEventProducts[productIndex], [field]: value };
       } else {
-        // Add new event product
         const newEventProduct: EventProduct = {
           ...existingProductInfo,
           quantityTaken: 0,
@@ -149,7 +146,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [savedEvents, setCurrentEvent]);
 
-  // FIX: Removed the 'useMemo' hook that was causing build errors.
+  // CORREÇÃO: Removido o 'useMemo' que estava causando os erros de build.
   const value: AppContextType = {
     products,
     addProduct,
