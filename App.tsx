@@ -16,20 +16,14 @@ const SAVE_EVENT_PASSWORD = '12345';
 
 const AppContent: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('home');
-  const { currentEvent, setSavedEvents, resetCurrentEvent, getCalculatedCosts } = useAppContext();
-
-  // State for products page password protection
+  const { currentEvent, saveEvent, resetCurrentEvent, getCalculatedCosts } = useAppContext();
   const [isProductsPageUnlocked, setIsProductsPageUnlocked] = useState(false);
   const [showProductsPasswordModal, setShowProductsPasswordModal] = useState(false);
   const [productsPasswordInput, setProductsPasswordInput] = useState('');
   const [productsPasswordError, setProductsPasswordError] = useState('');
-
-  // State for saving event password protection
   const [showSavePasswordModal, setShowSavePasswordModal] = useState(false);
   const [savePasswordInput, setSavePasswordInput] = useState('');
   const [savePasswordError, setSavePasswordError] = useState('');
-
-  // State for sharing modal
   const [showShareModal, setShowShareModal] = useState(false);
   const [copyButtonText, setCopyButtonText] = useState('Copiar');
 
@@ -48,34 +42,26 @@ const AppContent: React.FC = () => {
         setTimeout(() => setCopyButtonText('Copiar'), 2000);
     });
   };
+  
+  const handleWhatsAppShare = (isWeb: boolean) => {
+    const text = `Confira este aplicativo para gestão de doces da Thalu Doces: ${window.location.href}`;
+    const encodedText = encodeURIComponent(text);
+    const baseUrl = isWeb ? 'https://web.whatsapp.com/send?text=' : 'https://wa.me/?text=';
+    const shareUrl = `${baseUrl}${encodedText}`;
+    window.open(shareUrl, '_blank', 'noopener,noreferrer');
+  };
 
-  const executeSaveEvent = useCallback(() => {
+  const executeSaveEvent = useCallback(async () => {
     const totalSales = currentEvent.products.reduce((acc, p) => acc + (p.quantitySold * p.sellPrice), 0);
     const { totalCosts } = getCalculatedCosts(currentEvent);
     const profit = totalSales - totalCosts;
-
-    const eventToSave = {
-        ...currentEvent,
-        totalSales,
-        totalCosts,
-        profit,
-    };
-
-    setSavedEvents(prev => {
-      const existingEventIndex = prev.findIndex(e => e.id === eventToSave.id);
-      if (existingEventIndex > -1) {
-          const updatedEvents = [...prev];
-          updatedEvents[existingEventIndex] = eventToSave;
-          return updatedEvents;
-      }
-      return [...prev, eventToSave];
-    });
-
+    const eventToSave = { ...currentEvent, totalSales, totalCosts, profit };
+    await saveEvent(eventToSave);
     alert('Evento salvo com sucesso!');
     setShowSavePasswordModal(false);
     resetCurrentEvent();
     setActiveTab('events');
-  }, [currentEvent, setSavedEvents, resetCurrentEvent, getCalculatedCosts]);
+  }, [currentEvent, saveEvent, resetCurrentEvent, getCalculatedCosts]);
 
   const handleSaveEventRequest = useCallback(() => {
       if (!currentEvent.name) {
@@ -120,45 +106,27 @@ const AppContent: React.FC = () => {
   
   const renderContent = () => {
     switch (activeTab) {
-      case 'home':
-        return <HomePage />;
-      case 'products':
-        return <ProductsPage />;
-      case 'sales':
-        return <SalesPage onSaveEvent={handleSaveEventRequest} />;
-      case 'events':
-        return <EventsPage setActiveTab={setActiveTab} />;
-      default:
-        return <HomePage />;
+      case 'home': return <HomePage />;
+      case 'products': return <ProductsPage />;
+      case 'sales': return <SalesPage onSaveEvent={handleSaveEventRequest} />;
+      case 'events': return <EventsPage setActiveTab={setActiveTab} />;
+      default: return <HomePage />;
     }
   };
 
   return (
     <div className="min-h-screen bg-purple-50 text-gray-800 font-sans">
       <Header activeTab={activeTab} setActiveTab={handleTabChange} onShareClick={handleShareClick} />
-      <main className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
-        {renderContent()}
-      </main>
-      <footer className="text-center py-4 text-xs text-purple-400">
-        Feito com ♡ para Thalu Doces
-      </footer>
+      <main className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">{renderContent()}</main>
+      <footer className="text-center py-4 text-xs text-purple-400">Feito com ♡ para Thalu Doces</footer>
       
       {showProductsPasswordModal && (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4" aria-modal="true" role="dialog">
             <Card title="Acesso Restrito" className="w-full max-w-sm">
                 <p className="mb-4 text-sm text-gray-600">Por favor, insira a senha para acessar a página de Produtos e Custos.</p>
-                <Input
-                  label="Senha"
-                  id="page-password"
-                  type="password"
-                  value={productsPasswordInput}
-                  onChange={(e) => {
-                    setProductsPasswordInput(e.target.value);
-                    setProductsPasswordError('');
-                  }}
-                  onKeyUp={(e) => e.key === 'Enter' && handleProductsPasswordCheck()}
-                  icon={<LockClosedIcon />}
-                />
+                <Input label="Senha" id="page-password" type="password" value={productsPasswordInput}
+                  onChange={(e) => { setProductsPasswordInput(e.target.value); setProductsPasswordError(''); }}
+                  onKeyUp={(e) => e.key === 'Enter' && handleProductsPasswordCheck()} icon={<LockClosedIcon />}/>
                 {productsPasswordError && <p className="text-red-500 text-xs mt-1">{productsPasswordError}</p>}
                 <div className="flex justify-end space-x-2 mt-4">
                   <Button variant="secondary" onClick={() => setShowProductsPasswordModal(false)}>Cancelar</Button>
@@ -172,18 +140,9 @@ const AppContent: React.FC = () => {
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4" aria-modal="true" role="dialog">
             <Card title="Confirmar Alterações" className="w-full max-w-sm">
                 <p className="mb-4 text-sm text-gray-600">Para salvar as informações do evento, por favor, insira a senha.</p>
-                <Input
-                  label="Senha"
-                  id="save-password"
-                  type="password"
-                  value={savePasswordInput}
-                  onChange={(e) => {
-                    setSavePasswordInput(e.target.value);
-                    setSavePasswordError('');
-                  }}
-                  onKeyUp={(e) => e.key === 'Enter' && handleSavePasswordCheck()}
-                  icon={<LockClosedIcon />}
-                />
+                <Input label="Senha" id="save-password" type="password" value={savePasswordInput}
+                  onChange={(e) => { setSavePasswordInput(e.target.value); setSavePasswordError(''); }}
+                  onKeyUp={(e) => e.key === 'Enter' && handleSavePasswordCheck()} icon={<LockClosedIcon />} />
                 {savePasswordError && <p className="text-red-500 text-xs mt-1">{savePasswordError}</p>}
                 <div className="flex justify-end space-x-2 mt-4">
                   <Button variant="secondary" onClick={() => setShowSavePasswordModal(false)}>Cancelar</Button>
@@ -196,23 +155,19 @@ const AppContent: React.FC = () => {
       {showShareModal && (
           <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4" aria-modal="true" role="dialog">
               <Card title="Compartilhar App" className="w-full max-w-lg">
-                  <p className="mb-4 text-sm text-gray-600">
-                      Copie e envie este link. A pessoa que recebê-lo terá acesso apenas à visualização e uso do aplicativo, sem acesso ao código-fonte.
-                  </p>
+                  <p className="mb-4 text-sm text-gray-600">Copie o link ou compartilhe diretamente no WhatsApp. A pessoa que recebê-lo terá acesso apenas à visualização e uso do aplicativo.</p>
                   <div className="flex items-end space-x-2">
-                      <Input
-                          label="Link para Compartilhamento"
-                          id="share-link"
-                          type="text"
-                          value={window.location.href}
-                          readOnly
-                          className="bg-gray-100"
-                      />
-                      <Button onClick={handleCopyLink} className="flex-shrink-0">
-                          {copyButtonText}
-                      </Button>
+                      <Input label="Link para Compartilhamento" id="share-link" type="text" value={window.location.href} readOnly className="bg-gray-100"/>
+                      <Button onClick={handleCopyLink} className="flex-shrink-0">{copyButtonText}</Button>
                   </div>
-                  <div className="text-right mt-4">
+                   <div className="mt-4 pt-4 border-t border-gray-200">
+                      <p className="text-sm font-medium text-gray-700 mb-2">Ou compartilhe via:</p>
+                      <div className="flex flex-col sm:flex-row gap-2">
+                          <Button onClick={() => handleWhatsAppShare(false)} className="w-full">WhatsApp</Button>
+                          <Button onClick={() => handleWhatsAppShare(true)} className="w-full" variant="secondary">WhatsApp Web</Button>
+                      </div>
+                  </div>
+                  <div className="text-right mt-6">
                       <Button variant="secondary" onClick={() => setShowShareModal(false)}>Fechar</Button>
                   </div>
               </Card>
@@ -222,12 +177,5 @@ const AppContent: React.FC = () => {
   );
 };
 
-const App: React.FC = () => {
-  return (
-    <AppProvider>
-      <AppContent />
-    </AppProvider>
-  );
-};
-
+const App: React.FC = () => (<AppProvider><AppContent /></AppProvider>);
 export default App;
