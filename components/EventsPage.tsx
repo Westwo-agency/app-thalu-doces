@@ -36,7 +36,7 @@ export const EventsPage: React.FC<EventsPageProps> = ({ setActiveTab }) => {
             return;
         }
         if (showDeleteConfirmModal) {
-            setSavedEvents(prev => prev.filter(e => e.id !== showDeleteConfirmModal));
+            setSavedEvents((prev: EventData[]) => prev.filter((e: EventData) => e.id !== showDeleteConfirmModal));
         }
         setShowDeleteConfirmModal(null);
         setPassword('');
@@ -64,9 +64,9 @@ export const EventsPage: React.FC<EventsPageProps> = ({ setActiveTab }) => {
             autoTable(doc, {
                 startY: 50,
                 body: [
-                    ['Total de Vendas', `R$ ${event.totalSales.toFixed(2)}`],
-                    ['Total de Custos', `R$ ${event.totalCosts.toFixed(2)}`],
-                    [{ content: 'Lucro', styles: { fontStyle: 'bold' } }, { content: `R$ ${event.profit.toFixed(2)}`, styles: { fontStyle: 'bold' } }]
+                    ['Total de Vendas', `R$ ${(event.totalSales ?? 0).toFixed(2)}`],
+                    ['Total de Custos', `R$ ${(event.totalCosts ?? 0).toFixed(2)}`],
+                    [{ content: 'Lucro', styles: { fontStyle: 'bold' } }, { content: `R$ ${(event.profit ?? 0).toFixed(2)}`, styles: { fontStyle: 'bold' } }]
                 ],
                 theme: 'grid',
             });
@@ -83,7 +83,6 @@ export const EventsPage: React.FC<EventsPageProps> = ({ setActiveTab }) => {
                 body: [
                     ['Combustível (Ida e Volta)', `R$ ${fuelCost.toFixed(2)}`],
                     ['Ajudantes', `R$ ${helperCost.toFixed(2)}`],
-                    // FIX: Convert event.extraCosts to a number before calling toFixed.
                     ['Custos Extras', `R$ ${(parseFloat(String(event.extraCosts)) || 0).toFixed(2)}`],
                     ['Custo dos Produtos Vendidos', `R$ ${productsCost.toFixed(2)}`],
                 ],
@@ -107,7 +106,6 @@ export const EventsPage: React.FC<EventsPageProps> = ({ setActiveTab }) => {
             }
             
             // Inventory Summary Table
-            // FIX: Convert p.quantityTaken to a number for comparison and arithmetic operations.
             const inventoryData = event.products
                 .filter(p => (parseFloat(String(p.quantityTaken)) || 0) > 0)
                 .map(p => [p.name, p.quantityTaken, p.quantitySold, (parseFloat(String(p.quantityTaken)) || 0) - p.quantitySold]);
@@ -196,16 +194,16 @@ export const EventsPage: React.FC<EventsPageProps> = ({ setActiveTab }) => {
                                     <div className="mt-4 pt-4 border-t border-purple-100 grid grid-cols-2 md:grid-cols-3 gap-4 text-center">
                                         <div>
                                             <p className="text-xs text-gray-500">Vendas</p>
-                                            <p className="font-semibold text-green-600">R$ {event.totalSales.toFixed(2)}</p>
+                                            <p className="font-semibold text-green-600">R$ {(event.totalSales ?? 0).toFixed(2)}</p>
                                         </div>
                                         <div>
                                             <p className="text-xs text-gray-500">Custos</p>
-                                            <p className="font-semibold text-red-600">R$ {event.totalCosts.toFixed(2)}</p>
+                                            <p className="font-semibold text-red-600">R$ {(event.totalCosts ?? 0).toFixed(2)}</p>
                                         </div>
                                         <div className="col-span-2 md:col-span-1">
                                             <p className="text-xs text-gray-500">Lucro</p>
-                                            <p className={`font-bold text-lg ${event.profit >= 0 ? 'text-green-700' : 'text-red-700'}`}>
-                                                R$ {event.profit.toFixed(2)}
+                                            <p className={`font-bold text-lg ${(event.profit ?? 0) >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                                                R$ {(event.profit ?? 0).toFixed(2)}
                                             </p>
                                         </div>
                                     </div>
